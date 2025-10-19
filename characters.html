@@ -57,6 +57,19 @@
     .marker-label .year {
       font-weight: bold;
     }
+    .tooltip {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+      background-color: #fff;
+      border: 1px solid #ddd;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 14px;
+      color: #333;
+      transition: opacity 0.2s;
+    }
   </style>
 </head>
 <body>
@@ -67,24 +80,20 @@
 <script>
   // --- Data ---
   const periods = [
-    { label: "Adam (x years)", startYear: -4026, endYear: -3096 },
-    { label: "Enoch (x years)", startYear: -3404, endYear: -3039 },
-    { label: "Noah (x years)", startYear: -2970, endYear: -2020 },
-    { label: "Abraham (175 years)", startYear: -2018, endYear: -1843 },
-    { label: "Sarah (x years)", startYear: -2008, endYear: -1881 },
-    { label: "Isaac (180 years)", startYear: -1918, endYear: -1738 },
-    { label: "Jacob (147 years)", startYear: -1858, endYear: -1711 },
-    { label: "Joseph (x years)", startYear: -1767, endYear: -1657 },
-    { label: "Moses (x years)", startYear: -1593, endYear: -1473 },
+    { label: "Adam", startYear: -4026, endYear: -3096 },
+    { label: "Enoch", startYear: -3404, endYear: -3039 },
+    { label: "Noah", startYear: -2970, endYear: -2020 },
+    { label: "Abraham", startYear: -2018, endYear: -1843 },
+    { label: "Sarah", startYear: -2008, endYear: -1881 },
+    { label: "Isaac", startYear: -1918, endYear: -1738 },
+    { label: "Jacob", startYear: -1858, endYear: -1711 },
+    { label: "Joseph", startYear: -1767, endYear: -1657 },
+    { label: "Moses", startYear: -1593, endYear: -1473 },
   ];
 
   // Updated marker data to include labels
   const markerData = [
-    { year: -1943, label: "Abrahamic covenant made" },
-    { year: -1913, label: "Isaac weaned" },
-    { year: -1711, label: "Jacob's deathbed prophecy" },
-    { year: -1728, label: "Jacob enters Egypt" },
-    { year: -1513, label: "Exodus / Mosaic Law given" },
+    { year: -2370, label: "Flood" },
   ];
 
   // Sort markers by year to ensure alternation is sequential
@@ -100,6 +109,10 @@
       .attr("height", height + margin.top + margin.bottom)
     .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
+
+  // --- Tooltip ---
+  const tooltip = d3.select("body").append("div")
+    .attr("class", "tooltip");
 
   // --- Scales ---
   const xScale = d3.scaleLinear()
@@ -141,7 +154,18 @@
       .attr("y", d => yScale(d.label))
       .attr("width", d => xScale(d.endYear) - xScale(d.startYear))
       .attr("height", yScale.bandwidth())
-      .style("fill", d => colorScale(d.label)); // Set fill color dynamically
+      .style("fill", d => colorScale(d.label)) // Set fill color dynamically
+      .on("mouseover", (event, d) => {
+        tooltip.style("opacity", 1);
+      })
+      .on("mousemove", (event, d) => {
+        tooltip.html(`<strong>${d.label}</strong><br>${Math.abs(d.startYear)} - ${Math.abs(d.endYear)} B.C.E. (${Math.abs(d.startYear - d.endYear)} years)`)
+          .style("left", (event.pageX + 15) + "px")
+          .style("top", (event.pageY - 28) + "px");
+      })
+      .on("mouseout", () => {
+        tooltip.style("opacity", 0);
+      });
 
   chartGroup.selectAll("text.period-label")
     .data(periods)
