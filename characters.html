@@ -172,9 +172,10 @@
     .enter()
     .append("text")
       .attr("class", "period-label")
-      .attr("x", d => xScale(d.startYear) + 10)
+      .attr("x", d => xScale(d.startYear) + (xScale(d.endYear) - xScale(d.startYear)) / 2)
       .attr("y", d => yScale(d.label) + yScale.bandwidth() / 2)
       .attr("dy", "0.35em")
+      .attr("text-anchor", "middle")
       .text(d => d.label);
 
   // --- Drawing the Marker Lines and Labels ---
