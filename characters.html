@@ -70,12 +70,12 @@
     { label: "Adam (x years)", startYear: -4026, endYear: -3096 },
     { label: "Enoch (x years)", startYear: -3404, endYear: -3039 },
     { label: "Noah (x years)", startYear: -2970, endYear: -2020 },
-    { label: "Sarah (x years)", startYear: -2008, endYear: -1881 },
-    { label: "Joseph (x years)", startYear: -1767, endYear: -1657 },
-    { label: "Moses (x years)", startYear: -1593, endYear: -1473 },
     { label: "Abraham (175 years)", startYear: -2018, endYear: -1843 },
+    { label: "Sarah (x years)", startYear: -2008, endYear: -1881 },
     { label: "Isaac (180 years)", startYear: -1918, endYear: -1738 },
     { label: "Jacob (147 years)", startYear: -1858, endYear: -1711 },
+    { label: "Joseph (x years)", startYear: -1767, endYear: -1657 },
+    { label: "Moses (x years)", startYear: -1593, endYear: -1473 },
   ];
 
   // Updated marker data to include labels
@@ -103,7 +103,7 @@
 
   // --- Scales ---
   const xScale = d3.scaleLinear()
-    .domain([-2020, -1500])
+    .domain([-4026, -1450])
     .range([0, width]);
 
   const yScale = d3.scaleBand()
