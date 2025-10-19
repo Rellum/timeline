@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Bible Character Timeline</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+    }
+    h1 {
+      margin-bottom: 2rem;
+    }
+    .timeline-chart {
+      background-color: #f9f9f9;
+      border: 1px solid #ddd;
+    }
+    .axis-path {
+      stroke: #333;
+    }
+    .axis-tick line {
+      stroke: #ccc;
+    }
+    .axis-tick text {
+      fill: #555;
+      font-size: 12px;
+    }
+    .period-rect {
+      /* fill is now set dynamically by D3 */
+      stroke: rgba(0,0,0,0.5);
+      stroke-width: 1px;
+      opacity: 0.8;
+    }
+    .period-label {
+      font-size: 14px;
+      fill: white;
+      font-weight: bold;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
+      pointer-events: none; /* So the label doesn't block mouse events on the rect */
+    }
+    .marker-line {
+      stroke: #888;
+      stroke-width: 1px;
+      stroke-dasharray: 4 2;
+    }
+    .marker-label {
+      fill: #666;
+      font-size: 12px;
+      text-anchor: middle;
+    }
+    .marker-label .year {
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Exodus timeline</h1>
+<svg id="timeline-chart" class="timeline-chart"></svg>
+
+<script>
+  // --- Data ---
+  const periods = [
+    { label: "Abraham (175 years)", startYear: -2018, endYear: -1843 },
+    { label: "Isaac (180 years)", startYear: -1918, endYear: -1738 },
+    { label: "Jacob (147 years)", startYear: -1858, endYear: -1711 },
+    { label: "430-year period (Exodus 12:40, 41; Galatians 3:17)", startYear: -1943, endYear: -1513 },
+    { label: "400-years of affliction (Genesis 15:13)", startYear: -1913, endYear: -1513 },
+    { label: "Israelites in Egypt (215 years)", startYear: -1728, endYear: -1513 },
+  ];
+
+  // Updated marker data to include labels
+  const markerData = [
+    { year: -1943, label: "Abrahamic covenant made" },
+    { year: -1913, label: "Isaac weaned" },
+    { year: -1711, label: "Jacob's deathbed prophecy" },
+    { year: -1728, label: "Jacob enters Egypt" },
+    { year: -1513, label: "Exodus / Mosaic Law given" },
+  ];
+
+  // Sort markers by year to ensure alternation is sequential
+  markerData.sort((a, b) => a.year - b.year);
+
+  // --- Chart Setup ---
+  const margin = { top: 80, right: 50, bottom: 50, left: 50 }; // Increased top margin for two rows of labels
+  const width = 1000 - margin.left - margin.right;
+  const height = 300 - margin.top - margin.bottom;
+
+  const svg = d3.select("#timeline-chart")
+      .attr("width", width + margin.left + margin.right)
+      .attr("height", height + margin.top + margin.bottom)
+    .append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+
+  // --- Scales ---
+  const xScale = d3.scaleLinear()
+    .domain([-2020, -1500])
+    .range([0, width]);
+
+  const yScale = d3.scaleBand()
+    .domain(periods.map(d => d.label))
+    .range([0, height])
+    .padding(0.2);
+
+  // Color scale for the periods
+  const colorScale = d3.scaleOrdinal(d3.schemeCategory10)
+    .domain(periods.map(d => d.label));
+
+  // --- Axes ---
+  const xAxis = d3.axisBottom(xScale)
+    .ticks(10)
+    .tickFormat(d => `${Math.abs(d)} B.C.E.`);
+
+  svg.append("g")
+    .attr("class", "x-axis")
+    .attr("transform", `translate(0, ${height})`)
+    .call(xAxis)
+    .selectAll(".domain").attr("class", "axis-path");
+
+  svg.selectAll(".x-axis .tick line").attr("class", "axis-tick line");
+  svg.selectAll(".x-axis .tick text").attr("class", "axis-tick text");
+
+  // --- Drawing the Periods ---
+  const chartGroup = svg.append("g");
+
+  chartGroup.selectAll("rect")
+    .data(periods)
+    .enter()
+    .append("rect")
+      .attr("class", "period-rect")
+      .attr("x", d => xScale(d.startYear))
+      .attr("y", d => yScale(d.label))
+      .attr("width", d => xScale(d.endYear) - xScale(d.startYear))
+      .attr("height", yScale.bandwidth())
+      .style("fill", d => colorScale(d.label)); // Set fill color dynamically
+
+  chartGroup.selectAll("text.period-label")
+    .data(periods)
+    .enter()
+    .append("text")
+      .attr("class", "period-label")
+      .attr("x", d => xScale(d.startYear) + 10)
+      .attr("y", d => yScale(d.label) + yScale.bandwidth() / 2)
+      .attr("dy", "0.35em")
+      .text(d => d.label);
+
+  // --- Drawing the Marker Lines and Labels ---
+  const markerGroup = svg.append("g").attr("class", "markers");
+
+  // Define the Y positions for the two alternating rows
+  const markerRowY1 = -20;
+  const markerRowY2 = -50;
+
+  // Draw the lines
+  markerGroup.selectAll(".marker-line")
+    .data(markerData)
+    .enter()
+    .append("line")
+      .attr("class", "marker-line")
+      .attr("x1", d => xScale(d.year))
+      .attr("x2", d => xScale(d.year))
+      .attr("y1", (d, i) => (i % 2 === 0 ? markerRowY2 + 5 : markerRowY1 + 5)) // Start line below the text
+      .attr("y2", height);
+
+  // Draw the labels with tspans for two lines
+  const markerLabels = markerGroup.selectAll(".marker-label")
+    .data(markerData)
+    .enter()
+    .append("text")
+      .attr("class", "marker-label")
+      .attr("x", d => xScale(d.year))
+      .attr("y", (d, i) => (i % 2 === 0 ? markerRowY2 : markerRowY1)); // Alternate Y position
+
+  markerLabels.append("tspan")
+      .text(d => d.label);
+
+  markerLabels.append("tspan")
+      .attr("class", "year")
+      .attr("x", d => xScale(d.year))
+      .attr("dy", "1.2em") // Move to the next line
+      .text(d => `(${Math.abs(d.year)} B.C.E.)`);
+
+</script>
+
+</body>
+</html>
