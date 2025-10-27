@@ -70,19 +70,38 @@
       color: #333;
       transition: opacity 0.2s;
     }
+    .controls {
+      display: flex;
+      gap: 2rem;
+      margin-bottom: 1rem;
+    }
+    .controls h3 {
+      margin: 0 0 0.5rem 0;
+    }
+    #period-controls, #marker-controls {
+      display: flex;
+      flex-direction: column;
+    }
   </style>
 </head>
 <body>
 
 <h1>Bible character timeline</h1>
 <svg id="timeline-chart" class="timeline-chart"></svg>
+<div class="controls">
+  <h3>Periods</h3>
+  <div id="period-controls"></div>
+  <h3>Markers</h3>
+  <div id="marker-controls"></div>
+</div>
 
 <script>
   // --- Data ---
-  const periods = [
+  const allPeriods = [
     { label: "Adam", startYear: -4026, endYear: -3096 },
     { label: "Enoch", startYear: -3404, endYear: -3039 },
     { label: "Noah", startYear: -2970, endYear: -2020 },
+    { label: "Shem", startYear: -2468, endYear: -1868 },
     { label: "Abraham", startYear: -2018, endYear: -1843 },
     { label: "Sarah", startYear: -2008, endYear: -1881 },
     { label: "Isaac", startYear: -1918, endYear: -1738 },
@@ -91,16 +110,32 @@
     { label: "Moses", startYear: -1593, endYear: -1473 },
   ];
 
-  // Updated marker data to include labels
   const markerData = [
     { year: -2370, label: "Flood" },
+    // { year: -1553, label: "Moses flees" },
+    { year: -1513, label: "Exodus" },
+    { year: -1473, label: "Promised land" },
   ];
 
-  // Sort markers by year to ensure alternation is sequential
-  markerData.sort((a, b) => a.year - b.year);
+  let visiblePeriods = [...allPeriods];
+
+  // --- Controls ---
+  const periodControls = d3.select("#period-controls");
+  periodControls.selectAll("label")
+    .data(allPeriods)
+    .enter()
+    .append("label")
+    .html(d => `<input type="checkbox" class="period-toggle" value="${d.label}" checked> ${d.label}`);
+
+  const markerControls = d3.select("#marker-controls");
+  markerControls.selectAll("label")
+    .data(markerData)
+    .enter()
+    .append("label")
+    .html(d => `<input type="checkbox" class="marker-toggle" value="${d.label}" checked> ${d.label}`);
 
   // --- Chart Setup ---
-  const margin = { top: 80, right: 50, bottom: 50, left: 50 }; // Increased top margin for two rows of labels
+  const margin = { top: 80, right: 50, bottom: 50, left: 50 };
   const width = 1000 - margin.left - margin.right;
   const height = 300 - margin.top - margin.bottom;
 
@@ -110,109 +145,152 @@
     .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
 
+  // --- Scales ---
+  const xScale = d3.scaleLinear().range([0, width]);
+  const yScale = d3.scaleBand().range([0, height]).padding(0.2);
+  const colorScale = d3.scaleOrdinal(d3.schemeCategory10).domain(allPeriods.map(d => d.label));
+
+  // --- Axes ---
+  const xAxis = d3.axisBottom(xScale).ticks(10).tickFormat(d => `${Math.abs(d)} B.C.E.`);
+  const xAxisGroup = svg.append("g")
+    .attr("class", "x-axis")
+    .attr("transform", `translate(0, ${height})`);
+
+  // --- Groups for chart elements ---
+  const chartGroup = svg.append("g");
+  const markerGroup = svg.append("g").attr("class", "markers");
+
   // --- Tooltip ---
   const tooltip = d3.select("body").append("div")
     .attr("class", "tooltip");
 
-  // --- Scales ---
-  const xScale = d3.scaleLinear()
-    .domain([-4026, -1450])
-    .range([0, width]);
+  function update() {
+    // 1. Update scales based on visible data
+    const minYear = d3.min(visiblePeriods, d => d.startYear);
+    const maxYear = d3.max(visiblePeriods, d => d.endYear);
+    const padding = (maxYear - minYear) * 0.05;
+    xScale.domain([minYear - padding, maxYear + padding]);
+    yScale.domain(visiblePeriods.map(d => d.label));
 
-  const yScale = d3.scaleBand()
-    .domain(periods.map(d => d.label))
-    .range([0, height])
-    .padding(0.2);
+    // 2. Redraw X-axis
+    xAxisGroup.transition().duration(750).call(xAxis);
 
-  // Color scale for the periods
-  const colorScale = d3.scaleOrdinal(d3.schemeCategory10)
-    .domain(periods.map(d => d.label));
+    // 3. Data Join for period groups (rect + text)
+    const periodGroups = chartGroup.selectAll("g.period-group")
+      .data(visiblePeriods, d => d.label);
 
-  // --- Axes ---
-  const xAxis = d3.axisBottom(xScale)
-    .ticks(10)
-    .tickFormat(d => `${Math.abs(d)} B.C.E.`);
+    // EXIT old elements
+    periodGroups.exit()
+      .transition().duration(750)
+      .style("opacity", 0)
+      .remove();
 
-  svg.append("g")
-    .attr("class", "x-axis")
-    .attr("transform", `translate(0, ${height})`)
-    .call(xAxis)
-    .selectAll(".domain").attr("class", "axis-path");
+    // ENTER new elements
+    const enterGroups = periodGroups.enter()
+      .append("g")
+      .attr("class", "period-group")
+      .style("opacity", 0);
 
-  svg.selectAll(".x-axis .tick line").attr("class", "axis-tick line");
-  svg.selectAll(".x-axis .tick text").attr("class", "axis-tick text");
-
-  // --- Drawing the Periods ---
-  const chartGroup = svg.append("g");
-
-  chartGroup.selectAll("rect")
-    .data(periods)
-    .enter()
-    .append("rect")
+    enterGroups.append("rect")
       .attr("class", "period-rect")
-      .attr("x", d => xScale(d.startYear))
-      .attr("y", d => yScale(d.label))
-      .attr("width", d => xScale(d.endYear) - xScale(d.startYear))
-      .attr("height", yScale.bandwidth())
-      .style("fill", d => colorScale(d.label)) // Set fill color dynamically
-      .on("mouseover", (event, d) => {
-        tooltip.style("opacity", 1);
-      })
+      .attr("data-label", d => d.label)
+      .style("fill", d => colorScale(d.label))
+      .on("mouseover", (event, d) => tooltip.style("opacity", 1))
       .on("mousemove", (event, d) => {
         tooltip.html(`<strong>${d.label}</strong><br>${Math.abs(d.startYear)} - ${Math.abs(d.endYear)} B.C.E. (${Math.abs(d.startYear - d.endYear)} years)`)
           .style("left", (event.pageX + 15) + "px")
           .style("top", (event.pageY - 28) + "px");
       })
-      .on("mouseout", () => {
-        tooltip.style("opacity", 0);
-      });
+      .on("mouseout", () => tooltip.style("opacity", 0));
 
-  chartGroup.selectAll("text.period-label")
-    .data(periods)
-    .enter()
-    .append("text")
+    enterGroups.append("text")
       .attr("class", "period-label")
-      .attr("x", d => xScale(d.startYear) + (xScale(d.endYear) - xScale(d.startYear)) / 2)
-      .attr("y", d => yScale(d.label) + yScale.bandwidth() / 2)
-      .attr("dy", "0.35em")
       .attr("text-anchor", "middle")
+      .attr("dy", "0.35em")
       .text(d => d.label);
 
-  // --- Drawing the Marker Lines and Labels ---
-  const markerGroup = svg.append("g").attr("class", "markers");
+    // MERGE enter and update selections
+    const mergedGroups = enterGroups.merge(periodGroups);
 
-  // Define the Y positions for the two alternating rows
+    mergedGroups.transition().duration(750)
+      .style("opacity", 1);
+
+    mergedGroups.select("rect.period-rect")
+      .transition().duration(750)
+      .attr("x", d => xScale(d.startYear))
+      .attr("y", d => yScale(d.label))
+      .attr("width", d => xScale(d.endYear) - xScale(d.startYear))
+      .attr("height", yScale.bandwidth());
+
+    mergedGroups.select("text.period-label")
+      .transition().duration(750)
+      .attr("x", d => xScale(d.startYear) + (xScale(d.endYear) - xScale(d.startYear)) / 2)
+      .attr("y", d => yScale(d.label) + yScale.bandwidth() / 2);
+
+    // 4. Update markers to reflect new xScale
+    markerGroup.selectAll(".marker-line")
+      .data(markerData)
+      .transition().duration(750)
+      .attr("x1", d => xScale(d.year))
+      .attr("x2", d => xScale(d.year));
+
+    markerGroup.selectAll(".marker-label")
+      .data(markerData)
+      .transition().duration(750)
+      .attr("x", d => xScale(d.year))
+      .selectAll("tspan.year")
+      .attr("x", d => xScale(d.year));
+  }
+
+  // --- Initial Drawing and Marker Setup ---
+  // This part only runs once
   const markerRowY1 = -20;
   const markerRowY2 = -50;
 
-  // Draw the lines
-  markerGroup.selectAll(".marker-line")
+  markerGroup.selectAll("line.marker-line")
     .data(markerData)
     .enter()
     .append("line")
       .attr("class", "marker-line")
-      .attr("x1", d => xScale(d.year))
-      .attr("x2", d => xScale(d.year))
-      .attr("y1", (d, i) => (i % 2 === 0 ? markerRowY2 + 5 : markerRowY1 + 5)) // Start line below the text
+      .attr("y1", (d, i) => (i % 2 === 0 ? markerRowY2 + 5 : markerRowY1 + 5))
       .attr("y2", height);
 
-  // Draw the labels with tspans for two lines
-  const markerLabels = markerGroup.selectAll(".marker-label")
+  const markerLabels = markerGroup.selectAll("text.marker-label")
     .data(markerData)
     .enter()
     .append("text")
       .attr("class", "marker-label")
-      .attr("x", d => xScale(d.year))
-      .attr("y", (d, i) => (i % 2 === 0 ? markerRowY2 : markerRowY1)); // Alternate Y position
+      .attr("y", (d, i) => (i % 2 === 0 ? markerRowY2 : markerRowY1));
 
-  markerLabels.append("tspan")
-      .text(d => d.label);
-
+  markerLabels.append("tspan").text(d => d.label);
   markerLabels.append("tspan")
       .attr("class", "year")
-      .attr("x", d => xScale(d.year))
-      .attr("dy", "1.2em") // Move to the next line
+      .attr("dy", "1.2em")
       .text(d => `(${Math.abs(d.year)} B.C.E.)`);
+
+  update(); // Initial draw
+
+  // --- Event Handlers ---
+  d3.selectAll(".period-toggle").on("change", function() {
+    const label = d3.select(this).property("value");
+    if (this.checked) {
+      if (!visiblePeriods.find(p => p.label === label)) {
+        visiblePeriods.push(allPeriods.find(p => p.label === label));
+        visiblePeriods.sort((a, b) => allPeriods.findIndex(p => p.label === a.label) - allPeriods.findIndex(p => p.label === b.label));
+      }
+    } else {
+      visiblePeriods = visiblePeriods.filter(p => p.label !== label);
+    }
+    update();
+  });
+
+  d3.selectAll(".marker-toggle").on("change", function() {
+    const isChecked = d3.select(this).property("checked");
+    const label = d3.select(this).property("value");
+    markerGroup.selectAll(`.marker-line, .marker-label`).filter(d => d.label === label)
+      .transition().duration(300)
+      .style("opacity", isChecked ? 1 : 0);
+  });
 
 </script>
 
