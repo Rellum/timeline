@@ -125,14 +125,14 @@
     .data(allPeriods)
     .enter()
     .append("label")
-    .html(d => `<input type="checkbox" class="period-toggle" value="${d.label}" checked> ${d.label}`);
+    .html(d => `<input type=\"checkbox\" class=\"period-toggle\" value=\"${d.label}\" checked> ${d.label}`);
 
   const markerControls = d3.select("#marker-controls");
   markerControls.selectAll("label")
     .data(markerData)
     .enter()
     .append("label")
-    .html(d => `<input type="checkbox" class="marker-toggle" value="${d.label}" checked> ${d.label}`);
+    .html(d => `<input type=\"checkbox\" class=\"marker-toggle\" value=\"${d.label}\" checked> ${d.label}`);
 
   // --- Chart Setup ---
   const margin = { top: 80, right: 50, bottom: 50, left: 50 };
@@ -164,6 +164,55 @@
   const tooltip = d3.select("body").append("div")
     .attr("class", "tooltip");
 
+  // --- Touch/Press Handling ---
+  let pressTimer;
+  let longPressOccurred = false;
+
+  function handleTouchStart(event, d) {
+    event.preventDefault();
+    longPressOccurred = false;
+    pressTimer = setTimeout(() => {
+      longPressOccurred = true;
+      tooltip.style("opacity", 0).classed("pinned", false); // Hide any tooltips
+      const checkbox = d3.select(`.period-toggle[value=\"${d.label}\"]`);
+      if (checkbox.node()) {
+        checkbox.property("checked", false);
+        checkbox.dispatch("change");
+      }
+    }, 500);
+  }
+
+  function handleTouchEnd(event, d) {
+    clearTimeout(pressTimer);
+  }
+
+  function handleClick(event, d) {
+    if (longPressOccurred) {
+      event.preventDefault();
+      return;
+    }
+    // Toggle tooltip on short tap
+    const isPinned = tooltip.classed("pinned") && tooltip.datum().label === d.label;
+    if (isPinned) {
+      tooltip.classed("pinned", false).style("opacity", 0);
+    } else {
+      tooltip.classed("pinned", true)
+        .datum(d)
+        .html(`<strong>${d.label}</strong><br>${Math.abs(d.startYear)} - ${Math.abs(d.endYear)} B.C.E. (${Math.abs(d.startYear - d.endYear)} years)`)
+        .style("left", (event.pageX + 15) + "px")
+        .style("top", (event.pageY - 28) + "px")
+        .style("opacity", 1);
+    }
+  }
+
+  // Hide pinned tooltip on background click
+  svg.on("click", function(event) {
+    if (event.target === this) {
+        tooltip.classed("pinned", false).style("opacity", 0);
+    }
+  });
+
+
   function update() {
     // 1. Update scales based on visible data
     const minYear = d3.min(visiblePeriods, d => d.startYear);
@@ -191,17 +240,31 @@
       .attr("class", "period-group")
       .style("opacity", 0);
 
+    // Add rects and text to the entering groups
     enterGroups.append("rect")
       .attr("class", "period-rect")
       .attr("data-label", d => d.label)
       .style("fill", d => colorScale(d.label))
-      .on("mouseover", (event, d) => tooltip.style("opacity", 1))
-      .on("mousemove", (event, d) => {
-        tooltip.html(`<strong>${d.label}</strong><br>${Math.abs(d.startYear)} - ${Math.abs(d.endYear)} B.C.E. (${Math.abs(d.startYear - d.endYear)} years)`)
-          .style("left", (event.pageX + 15) + "px")
-          .style("top", (event.pageY - 28) + "px");
+      .on("touchstart", handleTouchStart)
+      .on("touchend", handleTouchEnd)
+      .on("click", handleClick)
+      .on("mouseover", function(event, d) {
+        if (!tooltip.classed("pinned")) {
+          tooltip.style("opacity", 1);
+        }
       })
-      .on("mouseout", () => tooltip.style("opacity", 0));
+      .on("mousemove", function(event, d) {
+        if (!tooltip.classed("pinned")) {
+          tooltip.html(`<strong>${d.label}</strong><br>${Math.abs(d.startYear)} - ${Math.abs(d.endYear)} B.C.E. (${Math.abs(d.startYear - d.endYear)} years)`)
+            .style("left", (event.pageX + 15) + "px")
+            .style("top", (event.pageY - 28) + "px");
+        }
+      })
+      .on("mouseout", function() {
+        if (!tooltip.classed("pinned")) {
+          tooltip.style("opacity", 0);
+        }
+      });
 
     enterGroups.append("text")
       .attr("class", "period-label")
@@ -227,23 +290,48 @@
       .attr("x", d => xScale(d.startYear) + (xScale(d.endYear) - xScale(d.startYear)) / 2)
       .attr("y", d => yScale(d.label) + yScale.bandwidth() / 2);
 
-    // 4. Update markers to reflect new xScale
+    // 4. Update markers
+    const xDomain = xScale.domain();
+
+    markerData.forEach(marker => {
+      const isInDomain = marker.year >= xDomain[0] && marker.year <= xDomain[1];
+      if (!isInDomain) {
+        const checkbox = d3.select(`.marker-toggle[value=\"${marker.label}\"]`);
+        if (checkbox.node()) {
+          checkbox.property("checked", false);
+        }
+      }
+    });
+
     markerGroup.selectAll(".marker-line")
-      .data(markerData)
+      .data(markerData, d => d.label)
       .transition().duration(750)
       .attr("x1", d => xScale(d.year))
-      .attr("x2", d => xScale(d.year));
+      .attr("x2", d => xScale(d.year))
+      .style("opacity", d => {
+          const checkbox = d3.select(`.marker-toggle[value=\"${d.label}\"]`);
+          const isChecked = checkbox.node() ? checkbox.property("checked") : true;
+          return isChecked ? 1 : 0;
+      });
 
-    markerGroup.selectAll(".marker-label")
-      .data(markerData)
+    const markerLabels = markerGroup.selectAll(".marker-label")
+      .data(markerData, d => d.label);
+
+    markerLabels
       .transition().duration(750)
       .attr("x", d => xScale(d.year))
-      .selectAll("tspan.year")
-      .attr("x", d => xScale(d.year));
+      .style("opacity", d => {
+          const checkbox = d3.select(`.marker-toggle[value=\"${d.label}\"]`);
+          const isChecked = checkbox.node() ? checkbox.property("checked") : true;
+          return isChecked ? 1 : 0;
+      });
+
+    markerLabels.selectAll("tspan.year")
+        .transition().duration(750)
+        .attr("x", d => xScale(d.year));
   }
 
   // --- Initial Drawing and Marker Setup ---
-  // This part only runs once
   const markerRowY1 = -20;
   const markerRowY2 = -50;
 
@@ -285,11 +373,7 @@
   });
 
   d3.selectAll(".marker-toggle").on("change", function() {
-    const isChecked = d3.select(this).property("checked");
-    const label = d3.select(this).property("value");
-    markerGroup.selectAll(`.marker-line, .marker-label`).filter(d => d.label === label)
-      .transition().duration(300)
-      .style("opacity", isChecked ? 1 : 0);
+    update();
   });
 
 </script>
